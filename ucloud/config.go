@@ -7,31 +7,28 @@ import (
 	"github.com/xiaohui/goucloud/ucloud/auth"
 )
 
-
-
 const (
-	DefaultRetries = -1
-	APIVersion string = "v2"
-	APIBaseURL string = "https://api.ucloud.cn/"
+	DefaultRetries        = -1
+	APIVersion     string = "v2"
+	APIBaseURL     string = "https://api.ucloud.cn/"
 )
 
+var DefaultCredential, _ = auth.LoadKeyPairFromEnv()
 
-var	DefaultCredential, _ = auth.LoadKeyPairFromEnv()
-
-var DefaultConfig 	= NewConfig().
-		WithCredentials(&DefaultCredential).
-		WithRegion(os.Getenv("UCLOUD_REGION")).
-		WithMaxRetries(DefaultRetries).
-		WithProjectId("").
-		WithSleepDelay(time.Sleep)
-
+var DefaultConfig = NewConfig().
+	WithCredentials(&DefaultCredential).
+	WithRegion(os.Getenv("UCLOUD_REGION")).
+	WithMaxRetries(DefaultRetries).
+	WithProjectId("").
+	WithSleepDelay(time.Sleep)
 
 // A Config provides service configuration for service clients. By default,
 // all clients will use the {defaults.DefaultConfig} structure.
+// TODO: max retries and timeout should be added
 type Config struct {
 	Credentials *auth.KeyPair
 
-	Region *string
+	Region string
 
 	MaxRetries int
 
@@ -59,7 +56,7 @@ func (c *Config) WithCredentials(creds *auth.KeyPair) *Config {
 // WithRegion sets a config Region value returning a Config pointer for
 // chaining.
 func (c *Config) WithRegion(region string) *Config {
-	c.Region = &region
+	c.Region = region
 	return c
 }
 
@@ -98,7 +95,7 @@ func (c Config) Merge(other *Config) *Config {
 		dst.Credentials = other.Credentials
 	}
 
-	if other.Region != nil {
+	if other.Region != "" {
 		dst.Region = other.Region
 	}
 
@@ -122,4 +119,3 @@ func (c Config) Copy() *Config {
 	dst := c
 	return &dst
 }
-

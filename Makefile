@@ -1,4 +1,4 @@
-.PHONY: test validate-dco validate-gofmt
+.PHONY: test validate-dco validate-gofmt example
 
 default: build
 
@@ -15,6 +15,8 @@ validate: validate-dco validate-gofmt test
 
 build: clean
 	script/build
+example: build
+	script/example
 
 clean:
 	rm -rf Godeps/_workspace/pkg

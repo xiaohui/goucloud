@@ -1,19 +1,16 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"encoding/json"
 	"net/http"
 	"net/url"
-	"reflect"
-	"strconv"
-	"strings"
 
 	"github.com/xiaohui/goucloud/ucloud"
-	"github.com/xiaohui/goucloud/ucloud/auth"
-	"github.com/xiaohui/goucloud/ucloud/request"
+	"github.com/xiaohui/goucloud/ucloud/uclouderr"
+	"github.com/xiaohui/goucloud/ucloud/utils"
 )
 
 type Service struct {
@@ -25,8 +22,8 @@ type Service struct {
 	HttpClient *http.Client
 }
 
-func (s *Service) DoRequest(url string, params interface{}, response interface{}) error {
-	requestURL, err := s.RequestURL(params)
+func (s *Service) DoRequest(action string, params interface{}, response interface{}) error {
+	requestURL, err := s.RequestURL(action, params)
 	if err != nil {
 		return fmt.Errorf("build request url failed, error: %s", err)
 	}
@@ -51,12 +48,16 @@ func (s *Service) DoRequest(url string, params interface{}, response interface{}
 	statusCode := httpResp.StatusCode
 	if statusCode >= 400 && statusCode <= 599 {
 
-		//TODO: parse the error messages
-		return fmt.Errorf("request error, status code:%s", statusCode)
+		uerr := uclouderr.UcloudError{}
+		err = json.Unmarshal(body, &uerr)
+		return &uclouderr.RequestFailed{
+			UcloudError: uerr,
+			StatusCode:  statusCode,
+		}
 	}
 
-	err = json.Unmarshal(body, response)
-	//log.Printf("%++v", response)
+	err = json.Unmarshal(body, &response)
+	fmt.Println("%+v", response)
 
 	if err != nil {
 		return fmt.Errorf("unmarshal url failed, error: %s", err)
@@ -66,102 +67,25 @@ func (s *Service) DoRequest(url string, params interface{}, response interface{}
 }
 
 // RequestURL is fully url of api request
-func (s *Service) RequestURL(params interface{}) (string, error) {
+func (s *Service) RequestURL(action string, params interface{}) (string, error) {
 	if len(s.BaseUrl) == 0 {
 		return "", errors.New("baseUrl is not set")
 	}
 
-	commonRequest := request.CommonRequest{
+	commonRequest := ucloud.CommonRequest{
+		Action:    action,
 		PublicKey: s.Config.Credentials.PublicKey,
 		ProjectId: s.Config.ProjectID,
 	}
 
 	values := url.Values{}
-	convertParamsToValues(commonRequest, &values)
-	convertParamsToValues(params, &values)
+	utils.ConvertParamsToValues(commonRequest, &values)
+	utils.ConvertParamsToValues(params, &values)
 
-	url, err := urlWithSignature(&values, s.BaseUrl, s.Config.Credentials.PrivateKey)
+	url, err := utils.UrlWithSignature(&values, s.BaseUrl, s.Config.Credentials.PrivateKey)
 	if err != nil {
 		return "", fmt.Errorf("convert params error: %s", err)
 	}
 
 	return url, nil
-}
-
-func convertParamsToValues(params interface{}, values *url.Values) {
-
-	elem := reflect.ValueOf(params)
-	if elem.Kind() == reflect.Ptr {
-		elem = elem.Elem()
-	}
-
-	elemType := elem.Type()
-	for i := 0; i < elem.NumField(); i++ {
-		fieldName := elemType.Field(i).Name
-
-		field := elem.Field(i)
-		kind := field.Kind()
-		if (kind == reflect.Ptr ||
-			kind == reflect.Array ||
-			kind == reflect.Slice ||
-			kind == reflect.Map ||
-			kind == reflect.Chan) && field.IsNil() {
-			continue
-
-		}
-
-		if kind == reflect.Ptr {
-			field = field.Elem()
-			kind = field.Kind()
-		}
-
-		var v string
-		switch kind {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = strconv.FormatInt(field.Int(), 10)
-
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = strconv.FormatUint(field.Uint(), 10)
-
-		case reflect.Float32:
-			v = strconv.FormatFloat(field.Float(), 'f', 4, 32)
-
-		case reflect.Float64:
-			v = strconv.FormatFloat(field.Float(), 'f', 4, 64)
-
-		case reflect.Bool:
-			v = strconv.FormatBool(field.Bool())
-
-		case reflect.String:
-			v = field.String()
-		}
-
-		if v != "" {
-			name := elemType.Field(i).Tag.Get("ArgName")
-			if name == "" {
-				name = fieldName
-			}
-
-			values.Set(name, v)
-		}
-	}
-}
-
-func urlWithSignature(values *url.Values, baseUrl, privateKey string) (string, error) {
-
-	urlEncoded, err := url.QueryUnescape(values.Encode())
-	if err != nil {
-		return "", fmt.Errorf("unescape failed, error: %s", err)
-	}
-
-	// replace '&' and '=' in url
-	urlEncoded = strings.Replace(urlEncoded, "=", "", -1)
-	urlEncoded = strings.Replace(urlEncoded, "&", "", -1)
-
-	signature, err := auth.GenerateSignature(urlEncoded, privateKey)
-	if err != nil {
-		return "", fmt.Errorf("generate signature error:%s", err)
-	}
-
-	return baseUrl + "?" + values.Encode() + "&Signature=" + url.QueryEscape(signature), nil
 }

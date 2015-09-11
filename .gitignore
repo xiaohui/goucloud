@@ -1,2 +1,5 @@
 .idea/
 *.iml
+*.example
+
+uhost_example
