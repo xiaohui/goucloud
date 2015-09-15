@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -86,4 +88,14 @@ func UrlWithSignature(values *url.Values, baseUrl, privateKey string) (string, e
 	}
 
 	return baseUrl + "?" + values.Encode() + "&Signature=" + url.QueryEscape(signature), nil
+}
+
+func DumpVal(vals ...interface{}) {
+	for _, val := range vals {
+		prettyJSON, err := json.MarshalIndent(val, "", "    ")
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Print(string(prettyJSON))
+	}
 }
